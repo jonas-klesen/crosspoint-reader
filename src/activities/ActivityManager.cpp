@@ -21,6 +21,7 @@
 #include "reader/ReaderActivity.h"
 #include "settings/OpdsServerListActivity.h"
 #include "settings/SettingsActivity.h"
+#include "study/StudyHomeActivity.h"
 #include "util/BmpViewerActivity.h"
 #include "util/FullScreenMessageActivity.h"
 
@@ -196,6 +197,8 @@ void ActivityManager::replaceActivity(std::unique_ptr<Activity>&& newActivity) {
 void ActivityManager::goToFileTransfer() {
   replaceActivity(std::make_unique<CrossPointWebServerActivity>(renderer, mappedInput));
 }
+
+void ActivityManager::goToStudy() { pushActivity(std::make_unique<StudyHomeActivity>(renderer, mappedInput)); }
 
 void ActivityManager::goToSettings() { replaceActivity(std::make_unique<SettingsActivity>(renderer, mappedInput)); }
 
