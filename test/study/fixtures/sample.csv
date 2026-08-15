@@ -1,0 +1,8 @@
+card_id,front,back
+
+demo-1,"2 + 2?","4"
+demo-2,"What does TCP provide?","A reliable, ordered byte stream."
+demo-3,"Which are valid: A, B, or C?","A, B, and C"
+demo-4,"What does ""RAII"" mean?","Resource Acquisition Is Initialization"
+de-1,"Was bedeutet Übertragung?","transmission"
+jp-1,"日本の首都は？","東京"

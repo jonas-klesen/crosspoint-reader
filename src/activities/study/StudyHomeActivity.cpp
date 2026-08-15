@@ -1,5 +1,6 @@
 #include "StudyHomeActivity.h"
 
+#include <CsvDeckParser.h>
 #include <FreeInkUI.h>
 #include <GfxRenderer.h>
 #include <I18n.h>
