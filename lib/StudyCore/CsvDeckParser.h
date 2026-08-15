@@ -52,6 +52,7 @@ class CsvDeckParser {
   bool finishRecord();
   bool finishInputRecord();
   bool hasCurrentRecord() const;
+  bool hasPendingFinalField() const;
   bool isBlankRecord() const;
   bool processHeader();
   bool processCard();

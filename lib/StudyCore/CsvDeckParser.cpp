@@ -36,6 +36,10 @@ bool CsvDeckParser::hasCurrentRecord() const {
   return fieldCount != 0 || state != State::FieldStart || rowHadComma || !field.empty();
 }
 
+bool CsvDeckParser::hasPendingFinalField() const {
+  return state != State::FieldStart || rowHadComma;
+}
+
 bool CsvDeckParser::isBlankRecord() const {
   return fieldCount == 0 || (fieldCount == 1 && !rowHadComma && !rowHadQuote && isBlankField(fields[0]));
 }
@@ -84,7 +88,7 @@ bool CsvDeckParser::processCard() {
 
 bool CsvDeckParser::finishRecord() {
   if (state == State::InQuotedField) return setError(DeckParseErrorCode::MalformedCsv, row);
-  if (state == State::InUnquotedField || state == State::AfterQuotedQuote || fieldCount != 0) {
+  if (hasPendingFinalField()) {
     if (!appendField()) return false;
   }
 

@@ -130,6 +130,11 @@ TEST(StudyDeckParser, RejectsWrongFieldCounts) {
   expectError("card_id,front,back\na,question,answer,extra\n", DeckParseErrorCode::WrongFieldCount, 2);
 }
 
+TEST(StudyDeckParser, CountsTrailingEmptyFieldsExactlyOnce) {
+  expectError("card_id,front,back\na,question,\n", DeckParseErrorCode::EmptyBack, 2);
+  expectError("card_id,front,back\na,question,,\n", DeckParseErrorCode::WrongFieldCount, 2);
+}
+
 TEST(StudyDeckParser, RejectsMalformedCsv) {
   expectError("card_id,front,back\na,\"question,answer\n", DeckParseErrorCode::MalformedCsv, 2);
   expectError("card_id,front,back\na,que\"stion,answer\n", DeckParseErrorCode::MalformedCsv, 2);
