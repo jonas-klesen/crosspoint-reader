@@ -5,6 +5,7 @@
 #include <Logging.h>
 #include <Memory.h>
 
+#include <algorithm>
 #include <memory>
 #include <utility>
 
@@ -12,6 +13,7 @@
 #include "ReviewActivity.h"
 #include "StudyFormat.h"
 #include "components/UITheme.h"
+#include "fontIds.h"
 
 namespace fui = freeink::ui;
 
@@ -90,7 +92,7 @@ void StudyDeckDetailsActivity::screenTrampoline(UiScreen& screen, void* user) {
 void StudyDeckDetailsActivity::startReview() {
   if (descriptor.status != studypet::DeckStatus::Valid || descriptor.cardCount == 0) return;
 
-  auto loaded = repository.loadDeck(descriptor.filename);
+  auto loaded = repository.loadDeck(descriptor.location);
   if (!loaded.ok()) {
     descriptor.status = loaded.parseError.code == studycore::DeckParseErrorCode::None ? studypet::DeckStatus::Unreadable
                                                                                       : studypet::DeckStatus::Invalid;
@@ -121,7 +123,9 @@ void StudyDeckDetailsActivity::buildScreen(UiScreen& screen) {
   const auto& metrics = UITheme::getInstance().getMetrics();
   screen.setContentMargin(
       fui::Insets{studypet::clampedInset(metrics.topPadding), 0, studypet::clampedInset(metrics.buttonHintsHeight), 0});
-  screen.header(tr(STR_STUDY_DECK_DETAILS), descriptor.filename.c_str());
+  const std::string path = renderer.truncatedText(SMALL_FONT_ID, descriptor.location.relativePath().c_str(),
+                                                  std::max(1, renderer.getScreenWidth() / 2));
+  screen.header(tr(STR_STUDY_DECK_DETAILS), path.c_str());
   screen.spacer(studypet::clampedInset(metrics.verticalSpacing));
 
   const fui::Rect body = screen.body();

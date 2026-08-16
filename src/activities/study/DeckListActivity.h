@@ -2,6 +2,7 @@
 
 #include <limits>
 #include <string>
+#include <string_view>
 #include <vector>
 
 #include "activities/UiListActivity.h"
@@ -24,13 +25,16 @@ class DeckListActivity final : public UiListActivity {
   }
   void buildScreen(UiScreen& screen) override;
   void activateIndex(int index) override;
-  const char* headerTitle() const override;
+  void drawChrome() override;
+  void onBackButton() override;
 
-  void reloadDecks();
+  void reloadDirectory(std::string_view selectedPath = {});
   void rebuildRows();
+  int findEntry(std::string_view relativePath) const;
 
   studypet::DeckRepository repository;
-  studypet::DeckListResult scanResult;
+  std::string currentDirectory;
+  studypet::DeckDirectoryResult scanResult;
   std::vector<std::string> rowLabels;
   std::vector<std::string> rowValues;
   std::vector<freeink::ui::ListItem> rowItems;

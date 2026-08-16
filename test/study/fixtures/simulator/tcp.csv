@@ -1,0 +1,4 @@
+card_id,front,back
+tcp-1,"What does TCP provide?","A reliable, ordered byte stream."
+tcp-2,"What identifies a TCP connection?","The four-tuple of endpoints and ports."
+tcp-3,"What does an ACK confirm?","Received sequence space."

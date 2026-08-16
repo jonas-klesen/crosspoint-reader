@@ -24,6 +24,7 @@ add_executable(DeckRepositoryRulesTest
 
 target_include_directories(DeckRepositoryRulesTest PRIVATE
   ${REPO_ROOT}/src/study/storage
+  ${REPO_ROOT}/lib/StudyCore
 )
 
 target_link_libraries(DeckRepositoryRulesTest PRIVATE

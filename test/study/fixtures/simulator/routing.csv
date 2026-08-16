@@ -1,0 +1,3 @@
+card_id,front,back
+routing-1,"What is a default route?","The route used when no more specific route matches."
+routing-2,"What does a router forward?","Packets between networks."

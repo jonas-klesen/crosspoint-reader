@@ -1,40 +1,45 @@
 #include "DeckRepository.h"
 
-#include <FsHelpers.h>
 #include <HalStorage.h>
 #include <Logging.h>
 
 #include <algorithm>
 #include <array>
-#include <cctype>
+#include <string_view>
 #include <utility>
-
-#include "DeckRepositoryRules.h"
 
 namespace studypet {
 namespace {
 
-constexpr size_t READ_BUFFER_SIZE = 256;
+constexpr std::size_t READ_BUFFER_SIZE = 256;
+constexpr std::size_t DECK_ENTRY_NAME_BUFFER_SIZE = MAX_DECK_COMPONENT_BYTES + 2;
 constexpr char MODULE_NAME[] = "STUDY";
 
-bool naturalFilenameLess(const std::string& left, const std::string& right) {
-  if (FsHelpers::naturalLess(left, right)) return true;
-  if (FsHelpers::naturalLess(right, left)) return false;
-  return left < right;
+bool browserEntryLess(const DeckBrowserEntry& left, const DeckBrowserEntry& right) {
+  const bool leftIsFolder = left.type == DeckBrowserEntryType::Folder;
+  const bool rightIsFolder = right.type == DeckBrowserEntryType::Folder;
+  if (deckEntryLess(leftIsFolder, left.displayName, rightIsFolder, right.displayName)) return true;
+  if (deckEntryLess(rightIsFolder, right.displayName, leftIsFolder, left.displayName)) return false;
+  return left.location.relativePath() < right.location.relativePath();
 }
-
-std::string deckPath(const std::string& filename) { return std::string(STUDY_DECK_DIRECTORY) + "/" + filename; }
 
 }  // namespace
 
-bool DeckRepository::isSafeFilename(const std::string& filename) { return isSafeDeckFilename(filename); }
+bool DeckRepository::buildStoragePath(const std::string_view relativePath, std::string& storagePath) {
+  if (!isSafeRelativePath(relativePath, true)) return false;
 
-std::string DeckRepository::displayNameFor(const std::string& filename) { return deckDisplayName(filename); }
+  storagePath.assign(STUDY_DECK_DIRECTORY);
+  if (!relativePath.empty()) {
+    storagePath.push_back('/');
+    storagePath.append(relativePath.data(), relativePath.size());
+  }
+  return true;
+}
 
-DeckRepositoryError DeckRepository::readDeck(const std::string& path, studycore::Deck& deck,
+DeckRepositoryError DeckRepository::readDeck(const std::string& storagePath, studycore::Deck& deck,
                                              studycore::DeckParseError& parseError) {
   HalFile file;
-  if (!Storage.openFileForRead(MODULE_NAME, path, file) || !file) return DeckRepositoryError::FileOpenFailed;
+  if (!Storage.openFileForRead(MODULE_NAME, storagePath, file) || !file) return DeckRepositoryError::FileOpenFailed;
   if (file.isDirectory()) {
     file.close();
     return DeckRepositoryError::FileOpenFailed;
@@ -65,19 +70,25 @@ DeckRepositoryError DeckRepository::readDeck(const std::string& path, studycore:
   return DeckRepositoryError::None;
 }
 
-DeckListResult DeckRepository::listDecks() {
-  DeckListResult result;
-  std::vector<DeckDescriptor> descriptors;
+DeckDirectoryResult DeckRepository::listDirectory(const std::string_view relativeDirectory) const {
+  DeckDirectoryResult result;
+  std::string storagePath;
+  if (!buildStoragePath(relativeDirectory, storagePath) || !isSafeRelativeDirectory(relativeDirectory)) {
+    result.error = DeckRepositoryError::InvalidRelativePath;
+    LOG_ERR("Study", "Rejected StudyPet directory path");
+    return result;
+  }
 
+  LOG_DBG("Study", "Listing StudyPet directory: %s", relativeDirectory.empty() ? "<root>" : storagePath.c_str());
   if (!Storage.ready()) {
     result.error = DeckRepositoryError::StorageUnavailable;
     return result;
   }
 
-  HalFile directory = Storage.open(STUDY_DECK_DIRECTORY);
+  HalFile directory = Storage.open(storagePath.c_str());
   if (!directory) {
-    result.error = Storage.exists(STUDY_DECK_DIRECTORY) ? DeckRepositoryError::DeckDirectoryOpenFailed
-                                                        : DeckRepositoryError::DeckDirectoryMissing;
+    result.error = Storage.exists(storagePath.c_str()) ? DeckRepositoryError::DeckDirectoryOpenFailed
+                                                       : DeckRepositoryError::DeckDirectoryMissing;
     return result;
   }
   if (!directory.isDirectory()) {
@@ -86,63 +97,113 @@ DeckListResult DeckRepository::listDecks() {
     return result;
   }
 
-  std::vector<std::string> filenames;
-  filenames.reserve(8);
+  std::vector<DeckBrowserEntry> entries;
+  entries.reserve(8);
   directory.rewindDirectory();
   for (HalFile entry = directory.openNextFile(); entry; entry = directory.openNextFile()) {
-    char filename[256]{};
-    const size_t nameLength = entry.getName(filename, sizeof(filename));
-    // getName() returns 0 when the name cannot be extracted and, in the worst
-    // case, fills the buffer exactly (capacity minus the terminator) when the
-    // name is truncated or unverifiable. Treat both as absent rather than
-    // parsing a partial or guessed name.
+    char filename[DECK_ENTRY_NAME_BUFFER_SIZE]{};
+    const std::size_t nameLength = entry.getName(filename, sizeof(filename));
+    // getName() returns 0 when extraction fails and fills the buffer to this
+    // boundary when the name may have been truncated.
     if (nameLength == 0 || nameLength >= sizeof(filename) - 1) {
       LOG_ERR("Study", "Skipping directory entry with unreadable filename");
       entry.close();
       continue;
     }
+
     const std::string name(filename);
-    const bool candidate = !entry.isDirectory() && isDeckCandidate(name);
-    if (candidate) filenames.push_back(name);
+    if (name.front() == '.') {
+      entry.close();
+      continue;
+    }
+
+    const bool isDirectory = entry.isDirectory();
+    if (!isDirectory && !isDeckCandidate(name)) {
+      entry.close();
+      continue;
+    }
+
+    std::string relativePath;
+    if (!joinRelativeDeckPath(relativeDirectory, name, relativePath)) {
+      LOG_ERR("Study", "Skipping overlong or unsafe StudyPet entry");
+      entry.close();
+      continue;
+    }
+
+    DeckLocation location;
+    if (isDirectory) {
+      if (!DeckLocation::tryCreate(relativePath, location)) {
+        LOG_ERR("Study", "Skipping invalid StudyPet folder path");
+        entry.close();
+        continue;
+      }
+      entry.close();
+      DeckBrowserEntry folder;
+      folder.type = DeckBrowserEntryType::Folder;
+      folder.displayName = name;
+      folder.location = std::move(location);
+      entries.push_back(std::move(folder));
+      continue;
+    }
+
+    if (!DeckLocation::tryCreateDeck(relativePath, location)) {
+      entry.close();
+      continue;
+    }
     entry.close();
+
+    std::string deckStoragePath;
+    if (!buildStoragePath(location.relativePath(), deckStoragePath)) {
+      LOG_ERR("Study", "Skipping invalid StudyPet deck location");
+      continue;
+    }
+
+    DeckBrowserEntry deckEntry;
+    deckEntry.type = DeckBrowserEntryType::Deck;
+    deckEntry.displayName = deckDisplayName(name);
+    deckEntry.location = std::move(location);
+
+    studycore::Deck deck;
+    deckEntry.repositoryError = readDeck(deckStoragePath, deck, deckEntry.parseError);
+    if (deckEntry.repositoryError != DeckRepositoryError::None) {
+      deckEntry.status = DeckStatus::Unreadable;
+      LOG_ERR("Study", "Cannot read deck %s", deckEntry.location.relativePath().c_str());
+    } else if (deckEntry.parseError.code != studycore::DeckParseErrorCode::None) {
+      deckEntry.status = DeckStatus::Invalid;
+      LOG_ERR("Study", "Deck %s invalid at row %zu", deckEntry.location.relativePath().c_str(),
+              deckEntry.parseError.row);
+    } else {
+      deckEntry.status = DeckStatus::Valid;
+      deckEntry.cardCount = deck.cards.size();
+      LOG_DBG("Study", "Discovered deck %s with %zu cards", deckEntry.location.relativePath().c_str(),
+              deckEntry.cardCount);
+    }
+    entries.push_back(std::move(deckEntry));
   }
   directory.close();
 
-  std::sort(filenames.begin(), filenames.end(), naturalFilenameLess);
-  descriptors.reserve(filenames.size());
-  for (const std::string& filename : filenames) {
-    DeckDescriptor descriptor;
-    descriptor.filename = filename;
-    descriptor.displayName = displayNameFor(filename);
-
-    studycore::Deck deck;
-    descriptor.repositoryError = readDeck(deckPath(filename), deck, descriptor.parseError);
-    if (descriptor.repositoryError != DeckRepositoryError::None) {
-      descriptor.status = DeckStatus::Unreadable;
-      LOG_ERR("Study", "Cannot read deck %s", filename.c_str());
-    } else if (descriptor.parseError.code != studycore::DeckParseErrorCode::None) {
-      descriptor.status = DeckStatus::Invalid;
-      LOG_ERR("Study", "Deck %s invalid at row %zu", filename.c_str(), descriptor.parseError.row);
-    } else {
-      descriptor.status = DeckStatus::Valid;
-      descriptor.cardCount = deck.cards.size();
-      LOG_DBG("Study", "Discovered deck %s with %zu cards", filename.c_str(), descriptor.cardCount);
-    }
-    descriptors.push_back(std::move(descriptor));
-  }
-
-  result.decks = std::move(descriptors);
+  std::sort(entries.begin(), entries.end(), browserEntryLess);
+  result.entries = std::move(entries);
   return result;
 }
 
-DeckLoadResult DeckRepository::loadDeck(const std::string& filename) const {
+DeckLoadResult DeckRepository::loadDeck(const DeckLocation& location) const {
   DeckLoadResult result;
-  if (!isSafeFilename(filename) || !hasCsvExtension(filename)) {
+  if (!isSafeRelativeDeckPath(location.relativePath())) {
     result.error = DeckRepositoryError::SelectedDeckUnavailable;
     return result;
   }
 
-  result.error = readDeck(deckPath(filename), result.deck, result.parseError);
+  std::string storagePath;
+  if (!buildStoragePath(location.relativePath(), storagePath)) {
+    result.error = DeckRepositoryError::SelectedDeckUnavailable;
+    return result;
+  }
+
+  result.error = readDeck(storagePath, result.deck, result.parseError);
+  if (result.error == DeckRepositoryError::None && result.parseError.code == studycore::DeckParseErrorCode::None) {
+    LOG_DBG("Study", "Loaded StudyPet deck: %s", location.relativePath().c_str());
+  }
   return result;
 }
 
