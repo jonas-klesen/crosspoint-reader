@@ -17,3 +17,18 @@ target_link_libraries(StudyDeckParserTest PRIVATE
 )
 
 gtest_discover_tests(StudyDeckParserTest)
+
+add_executable(DeckRepositoryRulesTest
+  DeckRepositoryRulesTest.cpp
+)
+
+target_include_directories(DeckRepositoryRulesTest PRIVATE
+  ${REPO_ROOT}/src/study/storage
+)
+
+target_link_libraries(DeckRepositoryRulesTest PRIVATE
+  crosspoint_test_common
+  GTest::gtest_main
+)
+
+gtest_discover_tests(DeckRepositoryRulesTest)

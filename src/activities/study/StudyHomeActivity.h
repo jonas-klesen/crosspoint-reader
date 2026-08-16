@@ -1,17 +1,18 @@
 #pragma once
 
-#include "activities/Activity.h"
-#include "components/UiAppHost.h"
+#include "activities/UiListActivity.h"
 
-class StudyHomeActivity final : public Activity, private UiAppHost {
+class StudyHomeActivity final : public UiListActivity {
  public:
   explicit StudyHomeActivity(GfxRenderer& renderer, MappedInputManager& mappedInput);
 
   void onEnter() override;
-  void loop() override;
-  void render(RenderLock&&) override;
 
  private:
-  static void screenTrampoline(UiScreen& screen, void* user);
-  void buildScreen(UiScreen& screen);
+  int listCount() const override { return 1; }
+  void buildScreen(UiScreen& screen) override;
+  void activateIndex(int index) override;
+  const char* headerTitle() const override;
+
+  freeink::ui::ListItem rowItem{};
 };
