@@ -136,12 +136,53 @@ TEST(StudyDeckParser, CountsTrailingEmptyFieldsExactlyOnce) {
   expectError("card_id,front,back\na,question,,\n", DeckParseErrorCode::WrongFieldCount, 2);
 }
 
-TEST(StudyDeckParser, RejectsMalformedCsv) {
-  expectError("card_id,front,back\na,\"question,answer\n", DeckParseErrorCode::MalformedCsv, 2);
-  expectError("card_id,front,back\na,que\"stion,answer\n", DeckParseErrorCode::MalformedCsv, 2);
-  expectError("card_id,front,back\na,\"question\"junk,answer\n", DeckParseErrorCode::MalformedCsv, 2);
-  expectError("card_id,front,back\na,\"question\n", DeckParseErrorCode::MalformedCsv, 2);
-  expectError("card_id,front,back\na,\"question\ranswer\",answer\n", DeckParseErrorCode::MalformedCsv, 2);
+TEST(StudyDeckParser, ParsesMultilineQuotedFieldsAndNormalizesCrLf) {
+  const DeckParseResult result = parseCsv(
+      "card_id,front,back\n"
+      "a,\"line one\nline two\",\"1. first\r\n2. second\r\n\r\n3. \"\"quoted\"\", comma\"\n");
+
+  ASSERT_TRUE(result.ok());
+  ASSERT_EQ(result.deck.cards.size(), 1u);
+  EXPECT_EQ(result.deck.cards[0].front, "line one\nline two");
+  EXPECT_EQ(result.deck.cards[0].back, "1. first\n2. second\n\n3. \"quoted\", comma");
+}
+
+TEST(StudyDeckParser, PreservesTabsAndUtf8InsideMultilineFields) {
+  const DeckParseResult result = parseCsv(
+      "card_id,front,back\n"
+      "utf8,\"State:\tSYN-SENT\nÜbertragung\",\"α β γ\nEspañol\"\n");
+
+  ASSERT_TRUE(result.ok());
+  ASSERT_EQ(result.deck.cards.size(), 1u);
+  EXPECT_EQ(result.deck.cards[0].front, "State:\tSYN-SENT\nÜbertragung");
+  EXPECT_EQ(result.deck.cards[0].back, "α β γ\nEspañol");
+}
+
+TEST(StudyDeckParser, RejectsUnquotedNewlineAndLoneCarriageReturn) {
+  expectError("card_id,front,back\na,question\nanswer,a\n", DeckParseErrorCode::WrongFieldCount, 2);
+  expectError("card_id,front,back\na,\"question\ranswer\",a\n", DeckParseErrorCode::MalformedCsv, 2);
+  expectError("card_id,front,back\na,\"question\rX\",a\n", DeckParseErrorCode::MalformedCsv, 2);
+  expectError("card_id,front,back\na,\"question\r", DeckParseErrorCode::UnexpectedEndOfInput, 2);
+}
+
+TEST(StudyDeckParser, SupportsMultilineAcrossEveryFeedBoundary) {
+  const std::string csv =
+      "card_id,front,back\r\n"
+      "a,\"first line\r\nsecond line\",\"answer, with \"\"quotes\"\"\ncontinued\"\r\n"
+      "b,\"Übertragung\nα\",\"東京\r\nstate\"\r\n";
+  const DeckParseResult expected = parseCsv(csv);
+  ASSERT_TRUE(expected.ok());
+
+  for (std::size_t chunkSize = 1; chunkSize <= csv.size(); ++chunkSize) {
+    const DeckParseResult actual = parseInChunks(csv, chunkSize);
+    ASSERT_TRUE(actual.ok()) << "chunk size " << chunkSize;
+    ASSERT_EQ(actual.deck.cards.size(), expected.deck.cards.size()) << "chunk size " << chunkSize;
+    for (std::size_t i = 0; i < expected.deck.cards.size(); ++i) {
+      EXPECT_EQ(actual.deck.cards[i].id, expected.deck.cards[i].id) << "chunk size " << chunkSize;
+      EXPECT_EQ(actual.deck.cards[i].front, expected.deck.cards[i].front) << "chunk size " << chunkSize;
+      EXPECT_EQ(actual.deck.cards[i].back, expected.deck.cards[i].back) << "chunk size " << chunkSize;
+    }
+  }
 }
 
 TEST(StudyDeckParser, RejectsEmptyRequiredFields) {
@@ -224,7 +265,7 @@ TEST(StudyDeckParser, ClearsDeckAfterIncrementalError) {
   Deck deck;
   CsvDeckParser parser(deck);
   ASSERT_TRUE(parser.feed("card_id,front,back\na,q,a\n"));
-  EXPECT_FALSE(parser.feed("a,\"unterminated\n"));
+  EXPECT_FALSE(parser.feed("a,\"unterminated\rX"));
   EXPECT_EQ(parser.error().code, DeckParseErrorCode::MalformedCsv);
   EXPECT_TRUE(deck.cards.empty());
   EXPECT_FALSE(parser.finish());
@@ -248,6 +289,20 @@ TEST(StudyDeckParser, FieldLimitsAcceptExactLimits) {
   EXPECT_EQ(result.deck.cards[0].id.size(), Card::MAX_ID_BYTES);
   EXPECT_EQ(result.deck.cards[0].front.size(), Card::MAX_TEXT_BYTES);
   EXPECT_EQ(result.deck.cards[0].back.size(), Card::MAX_TEXT_BYTES);
+}
+TEST(StudyDeckParser, MultilineFieldsCountNormalizedBytesAtLimit) {
+  const std::string exact = std::string(Card::MAX_TEXT_BYTES - 1, 'x') + '\n';
+  const DeckParseResult accepted = parseCsv("card_id,front,back\na,\"" + exact + "\",b\n");
+  ASSERT_TRUE(accepted.ok());
+  EXPECT_EQ(accepted.deck.cards[0].front.size(), Card::MAX_TEXT_BYTES);
+
+  const std::string over = std::string(Card::MAX_TEXT_BYTES, 'x') + '\n';
+  expectError("card_id,front,back\na,\"" + over + "\",b\n", DeckParseErrorCode::FieldTooLong, 2);
+
+  const std::string utf8Exact = std::string(Card::MAX_TEXT_BYTES - 3, 'x') + "\xC3\xA9\n";
+  const DeckParseResult utf8Accepted = parseCsv("card_id,front,back\na,\"" + utf8Exact + "\",b\n");
+  ASSERT_TRUE(utf8Accepted.ok());
+  EXPECT_EQ(utf8Accepted.deck.cards[0].front.size(), Card::MAX_TEXT_BYTES);
 }
 
 TEST(StudyDeckParser, FieldLimitsRejectIdOverflowUnquoted) {
@@ -308,6 +363,19 @@ TEST(StudyDeckParser, FieldLimitsAccountForEscapedQuoteBytes) {
   EXPECT_TRUE(bad.deck.cards.empty());
 }
 
+TEST(StudyDeckParser, AcceptsMaximumDeckOfMultilineCards) {
+  std::string csv = "card_id,front,back\n";
+  for (std::size_t index = 0; index < Deck::MAX_CARDS_PER_DECK; ++index) {
+    csv += "id-" + std::to_string(index) + ",\"line one\nline two\",\"answer\ncontinued\"\n";
+  }
+
+  const DeckParseResult result = parseCsv(csv);
+  ASSERT_TRUE(result.ok());
+  ASSERT_EQ(result.deck.cards.size(), Deck::MAX_CARDS_PER_DECK);
+  EXPECT_EQ(result.deck.cards.back().front, "line one\nline two");
+  EXPECT_EQ(result.deck.cards.back().back, "answer\ncontinued");
+}
+
 TEST(StudyDeckParser, FieldLimitsHoldAcrossChunkBoundaries) {
   const std::string csv = "card_id,front,back\na," + std::string(Card::MAX_TEXT_BYTES + 1, 'q') + ",b\n";
   const DeckParseResult expected = parseCsv(csv);
@@ -319,11 +387,10 @@ TEST(StudyDeckParser, FieldLimitsHoldAcrossChunkBoundaries) {
     EXPECT_TRUE(actual.deck.cards.empty()) << "chunk size " << chunkSize;
   }
 }
-
 TEST(StudyDeckParser, DetectsUnterminatedQuoteAtFinish) {
-  // feed() accepts every byte of a dangling quoted field; only finish()
-  // reports UnexpectedEndOfInput and parseCsv() must propagate that result.
-  const DeckParseResult result = parseCsv("card_id,front,back\na,\"unterminated");
+  // feed() accepts every byte of a dangling multiline field; finish() reports
+  // the incomplete quoted record without exposing partial cards.
+  const DeckParseResult result = parseCsv("card_id,front,back\na,\"line one\nline two");
   ASSERT_FALSE(result.ok());
   EXPECT_EQ(result.error.code, DeckParseErrorCode::UnexpectedEndOfInput);
   EXPECT_TRUE(result.deck.cards.empty());

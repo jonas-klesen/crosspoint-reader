@@ -1,0 +1,19 @@
+card_id,front,back
+structured,"TCP handshake:
+
+1. SYN
+2. SYN-ACK
+3. ACK
+
+Purpose:
+- synchronize sequence numbers
+- establish state","State:	SYN-SENT
+Next:	SYN-RECEIVED
+
+Übertragung α β γ"
+utf8-structured,"Übertragung
+Español
+α β γ","Résumé:	complete
+東京"
+long-structured,"- this is a long list item that must wrap onto another visual line without losing its hanging indentation
+- second item remains visible","Long answer line one with enough words to exercise bounded clipping and safe UTF-8 rendering."

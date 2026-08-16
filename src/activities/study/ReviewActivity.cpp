@@ -13,6 +13,7 @@
 #include "SessionSummaryActivity.h"
 #include "StudyFormat.h"
 #include "study/storage/StudyStatsStore.h"
+#include "study/rendering/CardTextRenderer.h"
 #include "components/UITheme.h"
 #include "fontIds.h"
 
@@ -124,20 +125,10 @@ void ReviewActivity::commitSessionStats(const bool completed) {
 void ReviewActivity::drawTextBlock(const std::string& text, const int top, const int bottom, const int maxLines,
                                    const int fontId) const {
   const int width = renderer.getScreenWidth() - 2 * CARD_SIDE_PADDING;
-  const int lineHeight = renderer.getLineHeight(fontId);
-  if (width <= 0 || bottom <= top || lineHeight <= 0) return;
+  if (width <= 0 || bottom <= top) return;
 
-  auto lines = renderer.wrappedText(fontId, text.c_str(), width, maxLines);
-  if (lines.empty()) return;
-
-  // wrappedText() returns at most maxLines lines, so the size_t -> int
-  // conversion below cannot overflow (maxLines is derived from the screen).
-  const int blockHeight = lineHeight * static_cast<int>(lines.size());
-  int y = top + std::max(0, (bottom - top - blockHeight) / 2);
-  for (const auto& line : lines) {
-    renderer.drawCenteredText(fontId, y, line.c_str());
-    y += lineHeight;
-  }
+  const studypet::CardTextRenderer textRenderer(renderer);
+  textRenderer.draw(text, CARD_SIDE_PADDING, top, width, bottom - top, fontId, maxLines, EpdFontFamily::REGULAR);
 }
 
 void ReviewActivity::render(RenderLock&&) {

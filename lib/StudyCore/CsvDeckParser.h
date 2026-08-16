@@ -28,11 +28,14 @@ struct DeckParseError {
   std::string duplicateId;
 };
 
-// Streams CSV deck data into a caller-owned Deck. The referenced Deck must
-// outlive the parser: feed()/finish() write into it directly, so a parser
-// that outlives its Deck would hold a dangling reference. Copies and moves are
-// deleted because moving a parser would leave the source holding a reference
-// to a destination that no longer reflects the source's streaming state.
+// Streams CSV deck data into a caller-owned Deck. Quoted fields may contain LF
+// or CRLF; embedded CRLF is stored as one LF. Record separators remain outside
+// quoted fields, and all pending separator/newline state survives feed() chunk
+// boundaries. The referenced Deck must outlive the parser: feed()/finish() write
+// into it directly, so a parser that outlives its Deck would hold a dangling
+// reference. Copies and moves are deleted because moving a parser would leave
+// the source holding a reference to a destination that no longer reflects the
+// source's streaming state.
 class CsvDeckParser {
  public:
   explicit CsvDeckParser(Deck& deck);
@@ -61,8 +64,10 @@ class CsvDeckParser {
   static std::size_t fieldLimitFor(std::size_t fieldIndex);
 
   bool canAppendFieldByte() const;
+  bool appendFieldByte(char value);
   bool appendField();
   bool finishRecord();
+
   bool finishInputRecord();
   bool hasCurrentRecord() const;
   bool hasPendingFinalField() const;
@@ -83,6 +88,7 @@ class CsvDeckParser {
   bool rowHadComma = false;
   bool rowHadQuote = false;
   bool pendingCarriageReturn = false;
+  bool pendingQuotedCarriageReturn = false;
   bool headerSeen = false;
   bool finished = false;
 };

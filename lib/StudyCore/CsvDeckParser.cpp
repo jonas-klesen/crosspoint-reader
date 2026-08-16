@@ -33,6 +33,12 @@ std::size_t CsvDeckParser::fieldLimitFor(const std::size_t fieldIndex) {
 
 bool CsvDeckParser::canAppendFieldByte() const { return field.size() < fieldLimitFor(fieldCount); }
 
+bool CsvDeckParser::appendFieldByte(const char value) {
+  if (!canAppendFieldByte()) return setError(DeckParseErrorCode::FieldTooLong, row);
+  field += value;
+  return true;
+}
+
 bool CsvDeckParser::appendField() {
   if (fieldCount >= 4) return setError(DeckParseErrorCode::WrongFieldCount, row);
 
@@ -129,6 +135,7 @@ void CsvDeckParser::resetRecord() {
   state = State::FieldStart;
   rowHadComma = false;
   rowHadQuote = false;
+  pendingQuotedCarriageReturn = false;
 }
 
 bool CsvDeckParser::feed(const std::string_view bytes) {
@@ -142,15 +149,28 @@ bool CsvDeckParser::feed(const std::string_view bytes) {
       continue;
     }
 
+    if (pendingQuotedCarriageReturn) {
+      if (value != '\n') return setError(DeckParseErrorCode::MalformedCsv, row);
+      pendingQuotedCarriageReturn = false;
+      if (!appendFieldByte('\n')) return false;
+      continue;
+    }
+
     if (value == '\r') {
-      if (state == State::InQuotedField) return setError(DeckParseErrorCode::MalformedCsv, row);
-      pendingCarriageReturn = true;
+      if (state == State::InQuotedField) {
+        pendingQuotedCarriageReturn = true;
+      } else {
+        pendingCarriageReturn = true;
+      }
       continue;
     }
 
     if (value == '\n') {
-      if (state == State::InQuotedField) return setError(DeckParseErrorCode::MalformedCsv, row);
-      if (!finishRecord()) return false;
+      if (state == State::InQuotedField) {
+        if (!appendFieldByte('\n')) return false;
+      } else {
+        if (!finishRecord()) return false;
+      }
       continue;
     }
 
@@ -163,8 +183,7 @@ bool CsvDeckParser::feed(const std::string_view bytes) {
           rowHadQuote = true;
           state = State::InQuotedField;
         } else {
-          if (!canAppendFieldByte()) return setError(DeckParseErrorCode::FieldTooLong, row);
-          field += value;
+          if (!appendFieldByte(value)) return false;
           state = State::InUnquotedField;
         }
         break;
@@ -177,24 +196,21 @@ bool CsvDeckParser::feed(const std::string_view bytes) {
         } else if (value == '"') {
           return setError(DeckParseErrorCode::MalformedCsv, row);
         } else {
-          if (!canAppendFieldByte()) return setError(DeckParseErrorCode::FieldTooLong, row);
-          field += value;
+          if (!appendFieldByte(value)) return false;
         }
         break;
 
       case State::InQuotedField:
         if (value == '"') {
           state = State::AfterQuotedQuote;
-        } else {
-          if (!canAppendFieldByte()) return setError(DeckParseErrorCode::FieldTooLong, row);
-          field += value;
+        } else if (!appendFieldByte(value)) {
+          return false;
         }
         break;
 
       case State::AfterQuotedQuote:
         if (value == '"') {
-          if (!canAppendFieldByte()) return setError(DeckParseErrorCode::FieldTooLong, row);
-          field += value;
+          if (!appendFieldByte(value)) return false;
           state = State::InQuotedField;
         } else if (value == ',') {
           rowHadComma = true;
@@ -215,7 +231,7 @@ bool CsvDeckParser::finish() {
   finished = true;
 
   if (parseError.code != DeckParseErrorCode::None) return false;
-  if (pendingCarriageReturn || state == State::InQuotedField) {
+  if (pendingCarriageReturn || pendingQuotedCarriageReturn || state == State::InQuotedField) {
     return setError(DeckParseErrorCode::UnexpectedEndOfInput, row);
   }
   if (!finishInputRecord()) return false;

@@ -17,6 +17,7 @@ cp "$FIXTURE_DIR/invalid.csv" "$DECK_DIR/invalid.csv"
 cp "$FIXTURE_DIR/long.csv" "$DECK_DIR/long.csv"
 cp "$FIXTURE_DIR/review.csv" "$DECK_DIR/review.csv"
 cp "$FIXTURE_DIR/utf8.csv" "$DECK_DIR/utf8.csv"
+cp "$FIXTURE_DIR/structured.csv" "$DECK_DIR/structured.csv"
 
 mkdir -p "$DECK_DIR/University/Networks"
 mkdir -p "$DECK_DIR/University/Computer Science/Advanced Networks"

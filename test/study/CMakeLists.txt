@@ -63,6 +63,22 @@ target_link_libraries(SessionStatsTest PRIVATE
 
 gtest_discover_tests(SessionStatsTest)
 
+add_executable(CardTextRendererTest
+  CardTextRendererTest.cpp
+)
+
+target_include_directories(CardTextRendererTest PRIVATE
+  ${REPO_ROOT}/src/study/rendering
+  ${REPO_ROOT}/lib/EpdFont
+)
+
+target_link_libraries(CardTextRendererTest PRIVATE
+  crosspoint_test_common
+  GTest::gtest_main
+)
+
+gtest_discover_tests(CardTextRendererTest)
+
 add_executable(StudyStatsTest
   StudyStatsTest.cpp
 )
