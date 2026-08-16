@@ -1,5 +1,7 @@
 #pragma once
 
+#include <array>
+
 #include "activities/UiListActivity.h"
 
 class StudyHomeActivity final : public UiListActivity {
@@ -9,10 +11,10 @@ class StudyHomeActivity final : public UiListActivity {
   void onEnter() override;
 
  private:
-  int listCount() const override { return 1; }
+  int listCount() const override { return 2; }
   void buildScreen(UiScreen& screen) override;
   void activateIndex(int index) override;
   const char* headerTitle() const override;
 
-  freeink::ui::ListItem rowItem{};
+  std::array<freeink::ui::ListItem, 2> rowItems{};
 };

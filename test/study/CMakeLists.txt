@@ -62,3 +62,35 @@ target_link_libraries(SessionStatsTest PRIVATE
 )
 
 gtest_discover_tests(SessionStatsTest)
+
+add_executable(StudyStatsTest
+  StudyStatsTest.cpp
+)
+
+target_include_directories(StudyStatsTest PRIVATE
+  ${REPO_ROOT}/lib/StudyCore
+)
+
+target_link_libraries(StudyStatsTest PRIVATE
+  crosspoint_test_common
+  GTest::gtest_main
+)
+
+gtest_discover_tests(StudyStatsTest)
+
+add_executable(StudyStatsJsonTest
+  StudyStatsJsonTest.cpp
+  ${REPO_ROOT}/src/study/storage/StudyStatsJson.cpp
+)
+
+target_include_directories(StudyStatsJsonTest PRIVATE
+  ${REPO_ROOT}/src/study/storage
+  ${REPO_ROOT}/lib/StudyCore
+)
+
+target_link_libraries(StudyStatsJsonTest PRIVATE
+  crosspoint_test_common
+  GTest::gtest_main
+)
+
+gtest_discover_tests(StudyStatsJsonTest)

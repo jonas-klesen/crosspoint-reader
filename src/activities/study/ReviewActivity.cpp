@@ -12,6 +12,7 @@
 #include "MappedInputManager.h"
 #include "SessionSummaryActivity.h"
 #include "StudyFormat.h"
+#include "study/storage/StudyStatsStore.h"
 #include "components/UITheme.h"
 #include "fontIds.h"
 
@@ -34,13 +35,17 @@ void ReviewActivity::onEnter() {
   currentCardIndex = 0;
   phase = ReviewPhase::Front;
   sessionStats = {};
+  statsCommitGuard.reset();
   LOG_INF("Study", "Started review: %s, %zu cards", deckDisplayName.c_str(), deck.cards.size());
   requestUpdate();
 }
 
+void ReviewActivity::onExit() { commitSessionStats(false); }
+
 void ReviewActivity::loop() {
   if (mappedInput.wasReleased(MappedInputManager::Button::Back)) {
     LOG_DBG("Study", "Review exited early at card %zu/%zu", currentCardIndex + 1, deck.cards.size());
+    commitSessionStats(false);
     finish();
     return;
   }
@@ -79,6 +84,7 @@ void ReviewActivity::judgeCard(const studycore::RecallJudgment judgment) {
 }
 
 void ReviewActivity::showCompletion() {
+  commitSessionStats(true);
   LOG_INF("Study", "Review completed: %u reviewed, %u known, %u did-not-know",
           static_cast<unsigned int>(sessionStats.reviewed), static_cast<unsigned int>(sessionStats.known),
           static_cast<unsigned int>(sessionStats.didNotKnow));
@@ -89,6 +95,30 @@ void ReviewActivity::showCompletion() {
     return;
   }
   startActivityForResult(std::move(summary), [this](const ActivityResult&) { finish(); });
+}
+
+void ReviewActivity::commitSessionStats(const bool completed) {
+  if (!statsCommitGuard.tryCommit()) return;
+  if (sessionStats.reviewed == 0) {
+    LOG_DBG("Study", "No judged cards to commit");
+    return;
+  }
+
+  studypet::StudyStatsStore store;
+  const studypet::StudyStatsLoadResult loaded = store.load();
+  if (!loaded.available()) {
+    LOG_ERR("Study", "Study stats unavailable; session totals were not saved");
+    return;
+  }
+
+  const studycore::StudyStats totals = studycore::addSession(loaded.stats, sessionStats, completed);
+  if (!store.save(totals)) {
+    LOG_ERR("Study", "Study stats save failed; session totals were not saved");
+    return;
+  }
+  LOG_INF("Study", "Session stats committed: %u reviewed, %u known, %u did-not-know",
+          static_cast<unsigned int>(sessionStats.reviewed), static_cast<unsigned int>(sessionStats.known),
+          static_cast<unsigned int>(sessionStats.didNotKnow));
 }
 
 void ReviewActivity::drawTextBlock(const std::string& text, const int top, const int bottom, const int maxLines,

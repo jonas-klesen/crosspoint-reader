@@ -8,6 +8,7 @@
 #include "DeckListActivity.h"
 #include "MappedInputManager.h"
 #include "StudyFormat.h"
+#include "StudyStatsActivity.h"
 #include "activities/ActivityManager.h"
 #include "components/UITheme.h"
 
@@ -20,10 +21,13 @@ const char* StudyHomeActivity::headerTitle() const { return tr(STR_STUDY_PET); }
 
 void StudyHomeActivity::onEnter() {
   UiListActivity::onEnter();
-  rowItem = {};
-  rowItem.label = tr(STR_STUDY_DECKS);
-  rowItem.subtitle = tr(STR_STUDY_DECKS_SUBTITLE);
-  rowItem.actionValue = 0;
+  rowItems = {};
+  rowItems[0].label = tr(STR_STUDY_DECKS);
+  rowItems[0].subtitle = tr(STR_STUDY_DECKS_SUBTITLE);
+  rowItems[0].actionValue = 0;
+  rowItems[1].label = tr(STR_STUDY_STATS);
+  rowItems[1].subtitle = tr(STR_STUDY_STATS_SUBTITLE);
+  rowItems[1].actionValue = 1;
 }
 
 void StudyHomeActivity::buildScreen(UiScreen& screen) {
@@ -36,8 +40,8 @@ void StudyHomeActivity::buildScreen(UiScreen& screen) {
   screen.spacer(studypet::clampedInset(metrics.verticalSpacing));
 
   fui::ListProps props;
-  props.items = &rowItem;
-  props.count = 1;
+  props.items = rowItems.data();
+  props.count = rowItems.size();
   props.action = ACTION_ROW;
   props.inputMask = fui::InputTouch;
   syncListViewport(screen, props, true);
@@ -45,12 +49,23 @@ void StudyHomeActivity::buildScreen(UiScreen& screen) {
 }
 
 void StudyHomeActivity::activateIndex(const int index) {
-  if (index != 0) return;
+  if (index < 0 || index >= listCount()) return;
   app.clearTapFlash();
-  auto deckList = makeUniqueNoThrow<DeckListActivity>(renderer, mappedInput);
-  if (!deckList) {
-    LOG_ERR("Study", "OOM: deck list activity");
+
+  if (index == 0) {
+    auto deckList = makeUniqueNoThrow<DeckListActivity>(renderer, mappedInput);
+    if (!deckList) {
+      LOG_ERR("Study", "OOM: deck list activity");
+      return;
+    }
+    activityManager.pushActivity(std::move(deckList));
     return;
   }
-  activityManager.pushActivity(std::move(deckList));
+
+  auto stats = makeUniqueNoThrow<StudyStatsActivity>(renderer, mappedInput);
+  if (!stats) {
+    LOG_ERR("Study", "OOM: stats activity");
+    return;
+  }
+  activityManager.pushActivity(std::move(stats));
 }
