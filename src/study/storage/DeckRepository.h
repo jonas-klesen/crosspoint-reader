@@ -55,7 +55,6 @@ struct DeckLoadResult {
 class DeckRepository {
  public:
   DeckListResult listDecks();
-  DeckLoadResult loadDeck(std::size_t index) const;
   DeckLoadResult loadDeck(const std::string& filename) const;
 
  private:
@@ -63,8 +62,6 @@ class DeckRepository {
   static std::string displayNameFor(const std::string& filename);
   static DeckRepositoryError readDeck(const std::string& path, studycore::Deck& deck,
                                       studycore::DeckParseError& parseError);
-
-  std::vector<DeckDescriptor> descriptors;
 };
 
 }  // namespace studypet

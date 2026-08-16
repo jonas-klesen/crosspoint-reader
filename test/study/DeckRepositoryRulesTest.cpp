@@ -36,6 +36,26 @@ TEST(DeckRepositoryRules, RejectsPathLikeNames) {
   EXPECT_FALSE(isSafeDeckFilename(".."));
 }
 
+TEST(DeckRepositoryRules, RejectsControlCharacters) {
+  EXPECT_FALSE(isSafeDeckFilename(std::string_view("deck\n.csv")));
+  EXPECT_FALSE(isSafeDeckFilename(std::string_view("deck\0.csv", 9)));
+  EXPECT_FALSE(isSafeDeckFilename(std::string_view("deck\x7f.csv", 9)));
+  EXPECT_FALSE(isDeckCandidate(std::string_view("deck\t.csv")));
+}
+
+TEST(DeckRepositoryRules, RequiresCsvSuffixForCandidates) {
+  EXPECT_FALSE(isDeckCandidate("notes.csv.txt"));
+  EXPECT_FALSE(isDeckCandidate("deck.csv.bak"));
+  EXPECT_TRUE(isDeckCandidate("deck.CsV"));
+  EXPECT_FALSE(isDeckCandidate("deck"));
+  EXPECT_FALSE(isDeckCandidate("deck."));
+}
+
+TEST(DeckRepositoryRules, KeepsDisplayNameOfNonCsvUntouched) {
+  EXPECT_EQ(deckDisplayName("notes.txt"), "notes.txt");
+  EXPECT_EQ(deckDisplayName(""), "");
+}
+
 TEST(DeckRepositoryRules, DerivesDisplayNameWithoutGuessing) {
   EXPECT_EQ(deckDisplayName("networks.csv"), "networks");
   EXPECT_EQ(deckDisplayName("CS_101-final.CSV"), "CS_101-final");

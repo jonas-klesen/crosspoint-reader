@@ -6,12 +6,12 @@
 #include <Memory.h>
 
 #include <algorithm>
-#include <cstdio>
 #include <memory>
 #include <utility>
 
 #include "MappedInputManager.h"
 #include "SessionSummaryActivity.h"
+#include "StudyFormat.h"
 #include "components/UITheme.h"
 #include "fontIds.h"
 
@@ -89,6 +89,8 @@ void ReviewActivity::drawTextBlock(const std::string& text, const int top, const
   auto lines = renderer.wrappedText(fontId, text.c_str(), width, maxLines);
   if (lines.empty()) return;
 
+  // wrappedText() returns at most maxLines lines, so the size_t -> int
+  // conversion below cannot overflow (maxLines is derived from the screen).
   const int blockHeight = lineHeight * static_cast<int>(lines.size());
   int y = top + std::max(0, (bottom - top - blockHeight) / 2);
   for (const auto& line : lines) {
@@ -112,7 +114,8 @@ void ReviewActivity::render(RenderLock&&) {
   GUI.drawHeader(renderer, Rect{0, headerY, width, metrics.headerHeight}, deckDisplayName.c_str());
 
   char progress[32]{};
-  std::snprintf(progress, sizeof(progress), tr(STR_STUDY_PROGRESS_FORMAT), currentCardIndex + 1, deck.cards.size());
+  studypet::safeFormat(progress, sizeof(progress), tr(STR_STUDY_INVALID), tr(STR_STUDY_PROGRESS_FORMAT),
+                       currentCardIndex + 1, deck.cards.size());
   const int progressWidth = renderer.getTextWidth(UI_10_FONT_ID, progress);
   renderer.drawText(UI_10_FONT_ID, width - CARD_SIDE_PADDING - progressWidth,
                     headerY + (metrics.headerHeight - renderer.getLineHeight(UI_10_FONT_ID)) / 2, progress);

@@ -2,10 +2,12 @@
 
 #include <GfxRenderer.h>
 #include <I18n.h>
+#include <Logging.h>
 #include <Memory.h>
 
 #include "DeckListActivity.h"
 #include "MappedInputManager.h"
+#include "StudyFormat.h"
 #include "activities/ActivityManager.h"
 #include "components/UITheme.h"
 
@@ -27,11 +29,11 @@ void StudyHomeActivity::onEnter() {
 void StudyHomeActivity::buildScreen(UiScreen& screen) {
   const auto& metrics = UITheme::getInstance().getMetrics();
   const Rect safe = UITheme::getInstance().getScreenSafeArea(renderer, true, false);
-  screen.setContentMargin(fui::Insets{static_cast<int16_t>(safe.y + metrics.topPadding + metrics.headerHeight),
-                                      static_cast<int16_t>(renderer.getScreenWidth() - (safe.x + safe.width)),
-                                      static_cast<int16_t>(renderer.getScreenHeight() - (safe.y + safe.height)),
-                                      static_cast<int16_t>(safe.x)});
-  screen.spacer(static_cast<int16_t>(metrics.verticalSpacing));
+  screen.setContentMargin(fui::Insets{studypet::clampedInset(safe.y + metrics.topPadding + metrics.headerHeight),
+                                      studypet::clampedInset(renderer.getScreenWidth() - (safe.x + safe.width)),
+                                      studypet::clampedInset(renderer.getScreenHeight() - (safe.y + safe.height)),
+                                      studypet::clampedInset(safe.x)});
+  screen.spacer(studypet::clampedInset(metrics.verticalSpacing));
 
   fui::ListProps props;
   props.items = &rowItem;

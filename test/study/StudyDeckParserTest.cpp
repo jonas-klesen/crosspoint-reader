@@ -6,6 +6,7 @@
 #include <iterator>
 #include <string>
 #include <string_view>
+#include <type_traits>
 #include <utility>
 
 #include "CsvDeckParser.h"
@@ -227,6 +228,112 @@ TEST(StudyDeckParser, ClearsDeckAfterIncrementalError) {
   EXPECT_EQ(parser.error().code, DeckParseErrorCode::MalformedCsv);
   EXPECT_TRUE(deck.cards.empty());
   EXPECT_FALSE(parser.finish());
+}
+
+namespace {
+
+std::string makeDeckRow(const std::string& id, const std::string& front, const std::string& back) {
+  return "card_id,front,back\n" + id + "," + front + "," + back + "\n";
+}
+
+}  // namespace
+
+TEST(StudyDeckParser, FieldLimitsAcceptExactLimits) {
+  const std::string id(Card::MAX_ID_BYTES, 'i');
+  const std::string text(Card::MAX_TEXT_BYTES, 't');
+  const DeckParseResult result = parseCsv(makeDeckRow(id, text, text));
+
+  ASSERT_TRUE(result.ok());
+  ASSERT_EQ(result.deck.cards.size(), 1u);
+  EXPECT_EQ(result.deck.cards[0].id.size(), Card::MAX_ID_BYTES);
+  EXPECT_EQ(result.deck.cards[0].front.size(), Card::MAX_TEXT_BYTES);
+  EXPECT_EQ(result.deck.cards[0].back.size(), Card::MAX_TEXT_BYTES);
+}
+
+TEST(StudyDeckParser, FieldLimitsRejectIdOverflowUnquoted) {
+  expectError(makeDeckRow(std::string(Card::MAX_ID_BYTES + 1, 'i'), "q", "a"), DeckParseErrorCode::FieldTooLong, 2);
+}
+
+TEST(StudyDeckParser, FieldLimitsRejectIdOverflowQuoted) {
+  const std::string longId = "\"" + std::string(Card::MAX_ID_BYTES + 1, 'i') + "\"";
+  const DeckParseResult result = parseCsv(makeDeckRow(longId, "q", "a"));
+
+  ASSERT_FALSE(result.ok());
+  EXPECT_EQ(result.error.code, DeckParseErrorCode::FieldTooLong);
+  EXPECT_EQ(result.error.row, 2u);
+  EXPECT_TRUE(result.deck.cards.empty());
+}
+
+TEST(StudyDeckParser, FieldLimitsRejectFrontBackOverflowUnquoted) {
+  expectError(makeDeckRow("a", std::string(Card::MAX_TEXT_BYTES + 1, 'q'), "b"), DeckParseErrorCode::FieldTooLong, 2);
+  expectError(makeDeckRow("a", "q", std::string(Card::MAX_TEXT_BYTES + 1, 'b')), DeckParseErrorCode::FieldTooLong, 2);
+}
+
+TEST(StudyDeckParser, FieldLimitsRejectQuotedOverflow) {
+  const std::string longFront = "\"" + std::string(Card::MAX_TEXT_BYTES + 1, 'q') + "\"";
+  const DeckParseResult result = parseCsv(makeDeckRow("a", longFront, "b"));
+
+  ASSERT_FALSE(result.ok());
+  EXPECT_EQ(result.error.code, DeckParseErrorCode::FieldTooLong);
+  EXPECT_EQ(result.error.row, 2u);
+  EXPECT_TRUE(result.deck.cards.empty());
+}
+
+TEST(StudyDeckParser, FieldLimitsRejectEscapedQuoteOverflow) {
+  // Quoted field with MAX_TEXT_BYTES characters plus an escaped quote pair;
+  // the first byte of the escape pushes the field past the limit.
+  const std::string content = std::string(Card::MAX_TEXT_BYTES, 'q') + "\"\"";
+  const DeckParseResult result = parseCsv(makeDeckRow("a", "\"" + content + "\"", "b"));
+
+  ASSERT_FALSE(result.ok());
+  EXPECT_EQ(result.error.code, DeckParseErrorCode::FieldTooLong);
+  EXPECT_EQ(result.error.row, 2u);
+  EXPECT_TRUE(result.deck.cards.empty());
+}
+
+TEST(StudyDeckParser, FieldLimitsAccountForEscapedQuoteBytes) {
+  // A quoted field whose decoded content is exactly MAX_TEXT_BYTES (one byte
+  // of it an escaped quote) still fits; one extra plain byte trips the limit.
+  const std::string decoded = std::string(Card::MAX_TEXT_BYTES - 1, 'q') + '"';
+  const std::string encoded = std::string(Card::MAX_TEXT_BYTES - 1, 'q') + "\"\"";
+  const DeckParseResult ok = parseCsv(makeDeckRow("a", "\"" + encoded + "\"", "b"));
+  ASSERT_TRUE(ok.ok());
+  EXPECT_EQ(ok.deck.cards[0].front, decoded);
+
+  const std::string overflowing = encoded + "x";
+  const DeckParseResult bad = parseCsv(makeDeckRow("a", "\"" + overflowing + "\"", "b"));
+  ASSERT_FALSE(bad.ok());
+  EXPECT_EQ(bad.error.code, DeckParseErrorCode::FieldTooLong);
+  EXPECT_EQ(bad.error.row, 2u);
+  EXPECT_TRUE(bad.deck.cards.empty());
+}
+
+TEST(StudyDeckParser, FieldLimitsHoldAcrossChunkBoundaries) {
+  const std::string csv = "card_id,front,back\na," + std::string(Card::MAX_TEXT_BYTES + 1, 'q') + ",b\n";
+  const DeckParseResult expected = parseCsv(csv);
+  ASSERT_EQ(expected.error.code, DeckParseErrorCode::FieldTooLong);
+
+  for (std::size_t chunkSize = 1; chunkSize <= csv.size(); ++chunkSize) {
+    const DeckParseResult actual = parseInChunks(csv, chunkSize);
+    EXPECT_EQ(actual.error.code, DeckParseErrorCode::FieldTooLong) << "chunk size " << chunkSize;
+    EXPECT_TRUE(actual.deck.cards.empty()) << "chunk size " << chunkSize;
+  }
+}
+
+TEST(StudyDeckParser, DetectsUnterminatedQuoteAtFinish) {
+  // feed() accepts every byte of a dangling quoted field; only finish()
+  // reports UnexpectedEndOfInput and parseCsv() must propagate that result.
+  const DeckParseResult result = parseCsv("card_id,front,back\na,\"unterminated");
+  ASSERT_FALSE(result.ok());
+  EXPECT_EQ(result.error.code, DeckParseErrorCode::UnexpectedEndOfInput);
+  EXPECT_TRUE(result.deck.cards.empty());
+}
+
+TEST(StudyDeckParser, IsNotCopyableOrMovable) {
+  static_assert(!std::is_copy_constructible_v<CsvDeckParser>);
+  static_assert(!std::is_copy_assignable_v<CsvDeckParser>);
+  static_assert(!std::is_move_constructible_v<CsvDeckParser>);
+  static_assert(!std::is_move_assignable_v<CsvDeckParser>);
 }
 
 }  // namespace

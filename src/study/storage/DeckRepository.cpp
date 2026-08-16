@@ -46,6 +46,7 @@ DeckRepositoryError DeckRepository::readDeck(const std::string& path, studycore:
     const int bytesRead = file.read(buffer.data(), buffer.size());
     if (bytesRead <= 0) {
       file.close();
+      deck.cards.clear();
       return DeckRepositoryError::ReadFailed;
     }
     if (!parser.feed(std::string_view(buffer.data(), static_cast<std::size_t>(bytesRead)))) {
@@ -56,14 +57,17 @@ DeckRepositoryError DeckRepository::readDeck(const std::string& path, studycore:
   }
 
   file.close();
-  parser.finish();
+  if (!parser.finish()) {
+    parseError = parser.error();
+    return DeckRepositoryError::None;
+  }
   parseError = parser.error();
   return DeckRepositoryError::None;
 }
 
 DeckListResult DeckRepository::listDecks() {
   DeckListResult result;
-  descriptors.clear();
+  std::vector<DeckDescriptor> descriptors;
 
   if (!Storage.ready()) {
     result.error = DeckRepositoryError::StorageUnavailable;
@@ -87,7 +91,16 @@ DeckListResult DeckRepository::listDecks() {
   directory.rewindDirectory();
   for (HalFile entry = directory.openNextFile(); entry; entry = directory.openNextFile()) {
     char filename[256]{};
-    entry.getName(filename, sizeof(filename));
+    const size_t nameLength = entry.getName(filename, sizeof(filename));
+    // getName() returns 0 when the name cannot be extracted and, in the worst
+    // case, fills the buffer exactly (capacity minus the terminator) when the
+    // name is truncated or unverifiable. Treat both as absent rather than
+    // parsing a partial or guessed name.
+    if (nameLength == 0 || nameLength >= sizeof(filename) - 1) {
+      LOG_ERR("Study", "Skipping directory entry with unreadable filename");
+      entry.close();
+      continue;
+    }
     const std::string name(filename);
     const bool candidate = !entry.isDirectory() && isDeckCandidate(name);
     if (candidate) filenames.push_back(name);
@@ -118,17 +131,8 @@ DeckListResult DeckRepository::listDecks() {
     descriptors.push_back(std::move(descriptor));
   }
 
-  result.decks = descriptors;
+  result.decks = std::move(descriptors);
   return result;
-}
-
-DeckLoadResult DeckRepository::loadDeck(const std::size_t index) const {
-  if (index >= descriptors.size()) {
-    DeckLoadResult result;
-    result.error = DeckRepositoryError::SelectedDeckUnavailable;
-    return result;
-  }
-  return loadDeck(descriptors[index].filename);
 }
 
 DeckLoadResult DeckRepository::loadDeck(const std::string& filename) const {

@@ -32,3 +32,18 @@ target_link_libraries(DeckRepositoryRulesTest PRIVATE
 )
 
 gtest_discover_tests(DeckRepositoryRulesTest)
+
+add_executable(StudyFormatTest
+  StudyFormatTest.cpp
+)
+
+target_include_directories(StudyFormatTest PRIVATE
+  ${REPO_ROOT}/src/activities/study
+)
+
+target_link_libraries(StudyFormatTest PRIVATE
+  crosspoint_test_common
+  GTest::gtest_main
+)
+
+gtest_discover_tests(StudyFormatTest)

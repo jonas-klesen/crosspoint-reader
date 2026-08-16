@@ -4,10 +4,10 @@
 #include <I18n.h>
 
 #include <algorithm>
-#include <cstdio>
 #include <utility>
 
 #include "MappedInputManager.h"
+#include "StudyFormat.h"
 #include "components/UITheme.h"
 #include "fontIds.h"
 
@@ -37,7 +37,7 @@ void SessionSummaryActivity::render(RenderLock&&) {
   GUI.drawHeader(renderer, Rect{0, metrics.topPadding, width, metrics.headerHeight}, deckDisplayName.c_str());
 
   char count[64]{};
-  std::snprintf(count, sizeof(count), tr(STR_STUDY_REVIEWED_COUNT_FORMAT), reviewedCards);
+  studypet::safeFormat(count, sizeof(count), tr(STR_STUDY_INVALID), tr(STR_STUDY_REVIEWED_COUNT_FORMAT), reviewedCards);
   const int contentTop = metrics.topPadding + metrics.headerHeight + metrics.verticalSpacing;
   const int contentBottom = height - metrics.buttonHintsHeight - metrics.verticalSpacing;
   const int lineHeight = renderer.getLineHeight(UI_12_FONT_ID);

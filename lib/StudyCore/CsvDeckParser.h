@@ -1,10 +1,10 @@
 #pragma once
 
-#include "Deck.h"
-
 #include <cstddef>
 #include <string>
 #include <string_view>
+
+#include "Deck.h"
 
 namespace studycore {
 
@@ -18,6 +18,7 @@ enum class DeckParseErrorCode {
   EmptyBack,
   DuplicateCardId,
   TooManyCards,
+  FieldTooLong,
   UnexpectedEndOfInput,
 };
 
@@ -27,9 +28,19 @@ struct DeckParseError {
   std::string duplicateId;
 };
 
+// Streams CSV deck data into a caller-owned Deck. The referenced Deck must
+// outlive the parser: feed()/finish() write into it directly, so a parser
+// that outlives its Deck would hold a dangling reference. Copies and moves are
+// deleted because moving a parser would leave the source holding a reference
+// to a destination that no longer reflects the source's streaming state.
 class CsvDeckParser {
  public:
   explicit CsvDeckParser(Deck& deck);
+
+  CsvDeckParser(const CsvDeckParser&) = delete;
+  CsvDeckParser& operator=(const CsvDeckParser&) = delete;
+  CsvDeckParser(CsvDeckParser&&) = delete;
+  CsvDeckParser& operator=(CsvDeckParser&&) = delete;
 
   bool feed(std::string_view bytes);
   bool finish();
@@ -47,7 +58,9 @@ class CsvDeckParser {
 
   static bool isAsciiWhitespace(char value);
   static bool isBlankField(const std::string& value);
+  static std::size_t fieldLimitFor(std::size_t fieldIndex);
 
+  bool canAppendFieldByte() const;
   bool appendField();
   bool finishRecord();
   bool finishInputRecord();
@@ -83,4 +96,4 @@ struct DeckParseResult {
 
 DeckParseResult parseCsv(std::string_view csv);
 
-}
+}  // namespace studycore

@@ -5,12 +5,12 @@
 #include <Logging.h>
 #include <Memory.h>
 
-#include <cstdio>
 #include <memory>
 #include <utility>
 
 #include "MappedInputManager.h"
 #include "ReviewActivity.h"
+#include "StudyFormat.h"
 #include "components/UITheme.h"
 
 namespace fui = freeink::ui;
@@ -56,7 +56,8 @@ void StudyDeckDetailsActivity::loop() {
 void StudyDeckDetailsActivity::buildMessage() {
   if (descriptor.status == studypet::DeckStatus::Valid) {
     char count[48]{};
-    std::snprintf(count, sizeof(count), tr(STR_STUDY_CARD_COUNT_FORMAT), descriptor.cardCount);
+    studypet::safeFormat(count, sizeof(count), tr(STR_STUDY_INVALID), tr(STR_STUDY_CARD_COUNT_FORMAT),
+                         descriptor.cardCount);
     message = count;
     message += "\n";
     message += descriptor.cardCount == 0 ? tr(STR_STUDY_NO_CARDS) : tr(STR_STUDY_START_REVIEW);
@@ -71,7 +72,8 @@ void StudyDeckDetailsActivity::buildMessage() {
   message = parseErrorLabel(descriptor.parseError.code);
   if (descriptor.parseError.row != 0) {
     char row[32]{};
-    std::snprintf(row, sizeof(row), tr(STR_STUDY_ERROR_ROW_FORMAT), descriptor.parseError.row);
+    studypet::safeFormat(row, sizeof(row), tr(STR_STUDY_ERROR_INVALID), tr(STR_STUDY_ERROR_ROW_FORMAT),
+                         descriptor.parseError.row);
     message += "\n";
     message += row;
   }
@@ -118,9 +120,9 @@ void StudyDeckDetailsActivity::startReview() {
 void StudyDeckDetailsActivity::buildScreen(UiScreen& screen) {
   const auto& metrics = UITheme::getInstance().getMetrics();
   screen.setContentMargin(
-      fui::Insets{static_cast<int16_t>(metrics.topPadding), 0, static_cast<int16_t>(metrics.buttonHintsHeight), 0});
+      fui::Insets{studypet::clampedInset(metrics.topPadding), 0, studypet::clampedInset(metrics.buttonHintsHeight), 0});
   screen.header(tr(STR_STUDY_DECK_DETAILS), descriptor.filename.c_str());
-  screen.spacer(static_cast<int16_t>(metrics.verticalSpacing));
+  screen.spacer(studypet::clampedInset(metrics.verticalSpacing));
 
   const fui::Rect body = screen.body();
   const auto titleHeight = screen.target().lineHeight(screen.theme().titleText.font);
@@ -133,7 +135,7 @@ void StudyDeckDetailsActivity::buildScreen(UiScreen& screen) {
   textProps.text = message.c_str();
   textProps.style = screen.theme().bodyText;
   textProps.showCaret = false;
-  screen.spacer(static_cast<int16_t>(titleHeight + metrics.verticalSpacing));
+  screen.spacer(studypet::clampedInset(titleHeight + metrics.verticalSpacing));
   screen.textArea(textProps);
 }
 
