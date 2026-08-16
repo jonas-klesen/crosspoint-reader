@@ -1,4 +1,7 @@
 #include "CardTextRenderer.h"
+#if defined(STUDYPET_MATH_SPIKE)
+#include "experimental/MathCardTextRenderer.h"
+#endif
 
 #include <GfxRenderer.h>
 
@@ -13,6 +16,12 @@ void CardTextRenderer::draw(const std::string_view text, const int left, const i
                             const int height, const int fontId, const int maxLines,
                             const EpdFontFamily::Style style) const {
   if (text.empty() || width <= 0 || height <= 0 || maxLines <= 0) return;
+#if defined(STUDYPET_MATH_SPIKE)
+  if (mathspike::MathCardTextRenderer::containsMath(text)) {
+    mathspike::MathCardTextRenderer(renderer).draw(text, left, top, width, height, fontId, maxLines, style);
+    return;
+  }
+#endif
 
   const int lineHeight = renderer.getLineHeight(fontId);
   if (lineHeight <= 0) return;
