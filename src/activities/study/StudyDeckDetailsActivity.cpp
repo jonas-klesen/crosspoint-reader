@@ -2,10 +2,15 @@
 
 #include <GfxRenderer.h>
 #include <I18n.h>
+#include <Logging.h>
+#include <Memory.h>
 
 #include <cstdio>
+#include <memory>
+#include <utility>
 
 #include "MappedInputManager.h"
+#include "ReviewActivity.h"
 #include "components/UITheme.h"
 
 namespace fui = freeink::ui;
@@ -41,7 +46,11 @@ void StudyDeckDetailsActivity::onEnter() {
 }
 
 void StudyDeckDetailsActivity::loop() {
-  if (mappedInput.wasReleased(MappedInputManager::Button::Back)) finish();
+  if (mappedInput.wasReleased(MappedInputManager::Button::Back)) {
+    finish();
+    return;
+  }
+  if (mappedInput.wasReleased(MappedInputManager::Button::Confirm)) startReview();
 }
 
 void StudyDeckDetailsActivity::buildMessage() {
@@ -50,7 +59,7 @@ void StudyDeckDetailsActivity::buildMessage() {
     std::snprintf(count, sizeof(count), tr(STR_STUDY_CARD_COUNT_FORMAT), descriptor.cardCount);
     message = count;
     message += "\n";
-    message += tr(STR_STUDY_REVIEW_NOT_IMPLEMENTED);
+    message += descriptor.cardCount == 0 ? tr(STR_STUDY_NO_CARDS) : tr(STR_STUDY_START_REVIEW);
     return;
   }
 
@@ -74,6 +83,36 @@ void StudyDeckDetailsActivity::buildMessage() {
 
 void StudyDeckDetailsActivity::screenTrampoline(UiScreen& screen, void* user) {
   static_cast<StudyDeckDetailsActivity*>(user)->buildScreen(screen);
+}
+
+void StudyDeckDetailsActivity::startReview() {
+  if (descriptor.status != studypet::DeckStatus::Valid || descriptor.cardCount == 0) return;
+
+  auto loaded = repository.loadDeck(descriptor.filename);
+  if (!loaded.ok()) {
+    descriptor.status = loaded.parseError.code == studycore::DeckParseErrorCode::None ? studypet::DeckStatus::Unreadable
+                                                                                      : studypet::DeckStatus::Invalid;
+    descriptor.repositoryError = loaded.error;
+    descriptor.parseError = loaded.parseError;
+    buildMessage();
+    requestUpdate();
+    return;
+  }
+  if (loaded.deck.cards.empty()) {
+    descriptor.cardCount = 0;
+    buildMessage();
+    requestUpdate();
+    return;
+  }
+
+  auto review =
+      makeUniqueNoThrow<ReviewActivity>(renderer, mappedInput, std::move(loaded.deck), descriptor.displayName);
+  if (!review) {
+    LOG_ERR("Study", "OOM: review activity");
+    return;
+  }
+  app.clearTapFlash();
+  startActivityForResult(std::move(review), nullptr);
 }
 
 void StudyDeckDetailsActivity::buildScreen(UiScreen& screen) {
@@ -101,7 +140,9 @@ void StudyDeckDetailsActivity::buildScreen(UiScreen& screen) {
 void StudyDeckDetailsActivity::render(RenderLock&&) {
   renderer.clearScreen();
   renderUi();
-  const auto labels = mappedInput.mapLabels(tr(STR_BACK), "", "", "");
+  const auto labels = mappedInput.mapLabels(
+      tr(STR_BACK), descriptor.status == studypet::DeckStatus::Valid && descriptor.cardCount > 0 ? tr(STR_SELECT) : "",
+      "", "");
   GUI.drawButtonHints(renderer, labels.btn1, labels.btn2, labels.btn3, labels.btn4);
   renderer.displayBuffer();
 }

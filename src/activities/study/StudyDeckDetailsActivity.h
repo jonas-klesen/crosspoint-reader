@@ -18,7 +18,9 @@ class StudyDeckDetailsActivity final : public Activity, private UiAppHost {
   static void screenTrampoline(UiScreen& screen, void* user);
   void buildScreen(UiScreen& screen);
   void buildMessage();
+  void startReview();
 
+  studypet::DeckRepository repository;
   studypet::DeckDescriptor descriptor;
   std::string message;
 };

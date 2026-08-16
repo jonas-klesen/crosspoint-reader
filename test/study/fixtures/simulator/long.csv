@@ -1,0 +1,2 @@
+card_id,front,back
+long-1,"Explain how a reliable transport protocol establishes connection state, orders data, detects loss, and recovers from missing segments across a network path.","A reliable transport protocol exchanges control messages, assigns sequence numbers, acknowledges received data, detects missing segments, and retransmits them without changing the source deck."

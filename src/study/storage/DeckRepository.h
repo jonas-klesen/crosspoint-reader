@@ -56,6 +56,7 @@ class DeckRepository {
  public:
   DeckListResult listDecks();
   DeckLoadResult loadDeck(std::size_t index) const;
+  DeckLoadResult loadDeck(const std::string& filename) const;
 
  private:
   static bool isSafeFilename(const std::string& filename);

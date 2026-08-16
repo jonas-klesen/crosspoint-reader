@@ -123,14 +123,22 @@ DeckListResult DeckRepository::listDecks() {
 }
 
 DeckLoadResult DeckRepository::loadDeck(const std::size_t index) const {
+  if (index >= descriptors.size()) {
+    DeckLoadResult result;
+    result.error = DeckRepositoryError::SelectedDeckUnavailable;
+    return result;
+  }
+  return loadDeck(descriptors[index].filename);
+}
+
+DeckLoadResult DeckRepository::loadDeck(const std::string& filename) const {
   DeckLoadResult result;
-  if (index >= descriptors.size() || !isSafeFilename(descriptors[index].filename) ||
-      !hasCsvExtension(descriptors[index].filename)) {
+  if (!isSafeFilename(filename) || !hasCsvExtension(filename)) {
     result.error = DeckRepositoryError::SelectedDeckUnavailable;
     return result;
   }
 
-  result.error = readDeck(deckPath(descriptors[index].filename), result.deck, result.parseError);
+  result.error = readDeck(deckPath(filename), result.deck, result.parseError);
   return result;
 }
 
