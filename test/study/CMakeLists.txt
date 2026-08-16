@@ -79,20 +79,20 @@ target_link_libraries(CardTextRendererTest PRIVATE
 
 gtest_discover_tests(CardTextRendererTest)
 
-add_executable(MathSpikeTest
-  MathSpikeTest.cpp
+add_executable(MathAssetTest
+  MathAssetTest.cpp
 )
 
-target_include_directories(MathSpikeTest PRIVATE
-  ${REPO_ROOT}/src/study/rendering/experimental
+target_include_directories(MathAssetTest PRIVATE
+  ${REPO_ROOT}/lib/StudyCore
 )
 
-target_link_libraries(MathSpikeTest PRIVATE
+target_link_libraries(MathAssetTest PRIVATE
   crosspoint_test_common
   GTest::gtest_main
 )
 
-gtest_discover_tests(MathSpikeTest)
+gtest_discover_tests(MathAssetTest)
 
 add_executable(StudyStatsTest
   StudyStatsTest.cpp
