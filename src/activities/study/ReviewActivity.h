@@ -3,6 +3,7 @@
 #include <cstddef>
 #include <string>
 
+#include "SessionStats.h"
 #include "activities/Activity.h"
 #include "study/storage/DeckRepository.h"
 
@@ -19,7 +20,7 @@ class ReviewActivity final : public Activity {
   enum class ReviewPhase { Front, Revealed };
 
   void revealCard();
-  void advanceCard();
+  void judgeCard(studycore::RecallJudgment judgment);
   void showCompletion();
   void drawTextBlock(const std::string& text, int top, int bottom, int maxLines, int fontId) const;
 
@@ -27,4 +28,5 @@ class ReviewActivity final : public Activity {
   std::string deckDisplayName;
   std::size_t currentCardIndex = 0;
   ReviewPhase phase = ReviewPhase::Front;
+  studycore::SessionStats sessionStats{};
 };

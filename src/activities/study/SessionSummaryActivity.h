@@ -3,12 +3,12 @@
 #include <cstddef>
 #include <string>
 
+#include "SessionStats.h"
 #include "activities/Activity.h"
-
 class SessionSummaryActivity final : public Activity {
  public:
   SessionSummaryActivity(GfxRenderer& renderer, MappedInputManager& mappedInput, std::string deckDisplayName,
-                         std::size_t reviewedCards);
+                         studycore::SessionStats sessionStats);
 
   void onEnter() override;
   void loop() override;
@@ -16,5 +16,5 @@ class SessionSummaryActivity final : public Activity {
 
  private:
   std::string deckDisplayName;
-  std::size_t reviewedCards;
+  studycore::SessionStats sessionStats{};
 };

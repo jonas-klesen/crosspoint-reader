@@ -12,10 +12,10 @@
 #include "fontIds.h"
 
 SessionSummaryActivity::SessionSummaryActivity(GfxRenderer& renderer, MappedInputManager& mappedInput,
-                                               std::string deckDisplayName, const std::size_t reviewedCards)
+                                               std::string deckDisplayName, studycore::SessionStats sessionStats)
     : Activity("StudySessionSummary", renderer, mappedInput),
       deckDisplayName(std::move(deckDisplayName)),
-      reviewedCards(reviewedCards) {}
+      sessionStats(sessionStats) {}
 
 void SessionSummaryActivity::onEnter() {
   Activity::onEnter();
@@ -36,14 +36,34 @@ void SessionSummaryActivity::render(RenderLock&&) {
   const int height = renderer.getScreenHeight();
   GUI.drawHeader(renderer, Rect{0, metrics.topPadding, width, metrics.headerHeight}, deckDisplayName.c_str());
 
-  char count[64]{};
-  studypet::safeFormat(count, sizeof(count), tr(STR_STUDY_INVALID), tr(STR_STUDY_REVIEWED_COUNT_FORMAT), reviewedCards);
   const int contentTop = metrics.topPadding + metrics.headerHeight + metrics.verticalSpacing;
   const int contentBottom = height - metrics.buttonHintsHeight - metrics.verticalSpacing;
   const int lineHeight = renderer.getLineHeight(UI_12_FONT_ID);
-  const int y = contentTop + std::max(0, (contentBottom - contentTop - 2 * lineHeight) / 2);
-  renderer.drawCenteredText(UI_12_FONT_ID, y, tr(STR_STUDY_SESSION_COMPLETE), true);
-  renderer.drawCenteredText(UI_12_FONT_ID, y + lineHeight, count, true);
+  const int blockHeight = lineHeight * 5 + metrics.verticalSpacing * 2;
+  int y = contentTop + std::max(0, (contentBottom - contentTop - blockHeight) / 2);
+
+  renderer.drawCenteredText(UI_12_FONT_ID, y, tr(STR_STUDY_SESSION_COMPLETE), true, EpdFontFamily::BOLD);
+  y += lineHeight + metrics.verticalSpacing;
+
+  char line[64]{};
+  studypet::safeFormat(line, sizeof(line), tr(STR_STUDY_INVALID), tr(STR_STUDY_REVIEWED_COUNT_FORMAT),
+                       static_cast<std::size_t>(sessionStats.reviewed));
+  renderer.drawCenteredText(UI_12_FONT_ID, y, line, true);
+  y += lineHeight;
+
+  studypet::safeFormat(line, sizeof(line), tr(STR_STUDY_INVALID), tr(STR_STUDY_KNOWN_COUNT_FORMAT),
+                       static_cast<unsigned int>(sessionStats.known));
+  renderer.drawCenteredText(UI_12_FONT_ID, y, line, true);
+  y += lineHeight;
+
+  studypet::safeFormat(line, sizeof(line), tr(STR_STUDY_INVALID), tr(STR_STUDY_DID_NOT_KNOW_COUNT_FORMAT),
+                       static_cast<unsigned int>(sessionStats.didNotKnow));
+  renderer.drawCenteredText(UI_12_FONT_ID, y, line, true);
+  y += lineHeight;
+
+  studypet::safeFormat(line, sizeof(line), tr(STR_STUDY_INVALID), tr(STR_STUDY_KNOWN_PERCENT_FORMAT),
+                       static_cast<unsigned int>(studycore::knownPercentage(sessionStats)));
+  renderer.drawCenteredText(UI_12_FONT_ID, y, line, true);
 
   const auto labels = mappedInput.mapLabels(tr(STR_BACK), tr(STR_DONE), "", "");
   GUI.drawButtonHints(renderer, labels.btn1, labels.btn2, labels.btn3, labels.btn4);

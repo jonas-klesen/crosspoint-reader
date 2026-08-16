@@ -47,3 +47,17 @@ target_link_libraries(StudyFormatTest PRIVATE
 )
 
 gtest_discover_tests(StudyFormatTest)
+add_executable(SessionStatsTest
+  SessionStatsTest.cpp
+)
+
+target_include_directories(SessionStatsTest PRIVATE
+  ${REPO_ROOT}/lib/StudyCore
+)
+
+target_link_libraries(SessionStatsTest PRIVATE
+  crosspoint_test_common
+  GTest::gtest_main
+)
+
+gtest_discover_tests(SessionStatsTest)

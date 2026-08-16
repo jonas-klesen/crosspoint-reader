@@ -33,6 +33,7 @@ void ReviewActivity::onEnter() {
   Activity::onEnter();
   currentCardIndex = 0;
   phase = ReviewPhase::Front;
+  sessionStats = {};
   LOG_INF("Study", "Started review: %s, %zu cards", deckDisplayName.c_str(), deck.cards.size());
   requestUpdate();
 }
@@ -44,12 +45,15 @@ void ReviewActivity::loop() {
     return;
   }
 
-  if (!mappedInput.wasReleased(MappedInputManager::Button::Confirm)) return;
-
   if (phase == ReviewPhase::Front) {
-    revealCard();
-  } else {
-    advanceCard();
+    if (mappedInput.wasReleased(MappedInputManager::Button::Confirm)) revealCard();
+    return;
+  }
+
+  if (mappedInput.wasReleased(MappedInputManager::Button::NavPrevious)) {
+    judgeCard(studycore::RecallJudgment::DidNotKnow);
+  } else if (mappedInput.wasReleased(MappedInputManager::Button::NavNext)) {
+    judgeCard(studycore::RecallJudgment::Known);
   }
 }
 
@@ -58,7 +62,12 @@ void ReviewActivity::revealCard() {
   requestUpdate();
 }
 
-void ReviewActivity::advanceCard() {
+void ReviewActivity::judgeCard(const studycore::RecallJudgment judgment) {
+  if (phase != ReviewPhase::Revealed || currentCardIndex >= deck.cards.size()) return;
+
+  sessionStats = studycore::recordJudgment(sessionStats, judgment);
+  LOG_INF("Study", "Card judged: %s", judgment == studycore::RecallJudgment::Known ? "known" : "did-not-know");
+
   ++currentCardIndex;
   if (currentCardIndex >= deck.cards.size()) {
     showCompletion();
@@ -70,8 +79,10 @@ void ReviewActivity::advanceCard() {
 }
 
 void ReviewActivity::showCompletion() {
-  LOG_INF("Study", "Review completed: %zu cards", deck.cards.size());
-  auto summary = makeUniqueNoThrow<SessionSummaryActivity>(renderer, mappedInput, deckDisplayName, deck.cards.size());
+  LOG_INF("Study", "Review completed: %u reviewed, %u known, %u did-not-know",
+          static_cast<unsigned int>(sessionStats.reviewed), static_cast<unsigned int>(sessionStats.known),
+          static_cast<unsigned int>(sessionStats.didNotKnow));
+  auto summary = makeUniqueNoThrow<SessionSummaryActivity>(renderer, mappedInput, deckDisplayName, sessionStats);
   if (!summary) {
     LOG_ERR("Study", "OOM: session summary activity");
     finish();
@@ -133,8 +144,14 @@ void ReviewActivity::render(RenderLock&&) {
         CARD_FALLBACK_FONT);
   }
 
-  const auto labels = mappedInput.mapLabels(
-      tr(STR_BACK), phase == ReviewPhase::Front ? tr(STR_STUDY_REVIEW_FRONT) : tr(STR_STUDY_REVIEW_NEXT), "", "");
-  GUI.drawButtonHints(renderer, labels.btn1, labels.btn2, labels.btn3, labels.btn4);
+  if (phase == ReviewPhase::Front) {
+    const auto labels = mappedInput.mapLabels(tr(STR_BACK), tr(STR_STUDY_REVIEW_FRONT), "", "");
+    GUI.drawButtonHints(renderer, labels.btn1, labels.btn2, labels.btn3, labels.btn4);
+  } else {
+    const auto labels =
+        mappedInput.mapLabels(tr(STR_BACK), "", tr(STR_STUDY_REVIEW_DID_NOT_KNOW), tr(STR_STUDY_REVIEW_KNOWN));
+    GUI.drawButtonHints(renderer, labels.btn1, labels.btn2, labels.btn3, labels.btn4);
+    GUI.drawSideButtonHints(renderer, tr(STR_STUDY_REVIEW_DID_NOT_KNOW), tr(STR_STUDY_REVIEW_KNOWN));
+  }
   renderer.displayBuffer();
 }
